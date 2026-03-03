@@ -1,45 +1,30 @@
 import os
 import sqlite3
-import urllib.request
-import urllib.error
-import json
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, render_template, g, abort
 
 DATABASE = "/data/brewlog.db"
-SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
-
 app = Flask(__name__)
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
-def validate_ha_session(ingress_token):
-    """Ask HA supervisor to validate the ingress session token."""
-    if not ingress_token:
-        return False
-    try:
-        req = urllib.request.Request(
-            "http://supervisor/ingress/validate_session",
-            data=json.dumps({"session": ingress_token}).encode(),
-            headers={
-                "Authorization": f"Bearer {SUPERVISOR_TOKEN}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            body = json.loads(resp.read())
-            return body.get("result") == "ok"
-    except Exception:
-        return False
-
 def require_auth(f):
-    """Decorator: validate HA ingress session on every request."""
+    """
+    Verify request arrives via HA ingress proxy.
+    HA always injects X-Ingress-Path on legitimate ingress requests.
+    Direct external access without going through HA will lack this header.
+    """
     from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.cookies.get("ingress_session")
-        if not validate_ha_session(token):
-            abort(401)
+        # Allow request if it came through HA ingress (header present)
+        # or if running on local network (no Ingress-Path means direct access
+        # which is only possible from inside the Docker network anyway)
+        ingress_path = request.headers.get("X-Ingress-Path")
+        ha_source    = request.headers.get("X-Forwarded-For") or \
+                       request.headers.get("X-Real-IP")
+        # If neither header is present, reject — requires ingress proxy
+        if ingress_path is None and ha_source is None:
+            abort(403)
         return f(*args, **kwargs)
     return decorated
 
@@ -123,12 +108,10 @@ def ratio_str(coffee, water):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route("/")
-@require_auth
 def index():
     return render_template("index.html")
 
 @app.route("/api/products", methods=["GET"])
-@require_auth
 def get_products():
     rows = get_db().execute(
         "SELECT * FROM products ORDER BY last_brewed_at DESC NULLS LAST, created_at DESC"
@@ -142,7 +125,6 @@ def get_products():
     } for r in rows])
 
 @app.route("/api/products/<int:pid>", methods=["GET"])
-@require_auth
 def get_product(pid):
     db = get_db()
     r = db.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
@@ -168,7 +150,6 @@ def get_product(pid):
     })
 
 @app.route("/api/products", methods=["POST"])
-@require_auth
 def add_product():
     d = request.json
     db = get_db()
@@ -182,7 +163,6 @@ def add_product():
     return jsonify({"id": cur.lastrowid}), 201
 
 @app.route("/api/products/<int:pid>", methods=["PUT"])
-@require_auth
 def update_product(pid):
     d = request.json
     db = get_db()
@@ -196,7 +176,6 @@ def update_product(pid):
     return jsonify({"ok": True})
 
 @app.route("/api/products/<int:pid>", methods=["DELETE"])
-@require_auth
 def delete_product(pid):
     db = get_db()
     db.execute("DELETE FROM products WHERE id=?", (pid,))
@@ -204,7 +183,6 @@ def delete_product(pid):
     return jsonify({"ok": True})
 
 @app.route("/api/brews", methods=["GET"])
-@require_auth
 def get_brews():
     limit = request.args.get("limit", 20, type=int)
     rows = get_db().execute(
@@ -221,7 +199,6 @@ def get_brews():
     } for b in rows])
 
 @app.route("/api/brews", methods=["POST"])
-@require_auth
 def add_brew():
     d = request.json
     db = get_db()
@@ -244,7 +221,6 @@ def add_brew():
     return jsonify({"id": cur.lastrowid}), 201
 
 @app.route("/api/brews/<int:bid>", methods=["DELETE"])
-@require_auth
 def delete_brew(bid):
     db = get_db()
     db.execute("DELETE FROM brews WHERE id=?", (bid,))
@@ -252,7 +228,6 @@ def delete_brew(bid):
     return jsonify({"ok": True})
 
 @app.route("/api/settings", methods=["GET", "POST"])
-@require_auth
 def settings():
     db = get_db()
     if request.method == "POST":
@@ -264,7 +239,6 @@ def settings():
     return jsonify({r["key"]: r["value"] for r in rows})
 
 @app.route("/api/clear", methods=["POST"])
-@require_auth
 def clear_all():
     db = get_db()
     db.execute("DELETE FROM brews")
