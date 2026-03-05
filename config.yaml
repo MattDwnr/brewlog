@@ -1,6 +1,6 @@
 name: "BrewLog"
 description: "Track your coffee products and brew sessions"
-version: "1.0.3"
+version: "1.1.0"
 slug: "brewlog"
 init: false
 arch:
@@ -13,7 +13,9 @@ boot: auto
 
 ingress: true
 ingress_port: 8099
+ingress_entry: /
 panel_icon: mdi:coffee
+panel_title: BrewLog
 
 options: {}
 schema: {}

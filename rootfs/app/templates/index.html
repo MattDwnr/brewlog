@@ -440,17 +440,10 @@
         </div>
         <div class="ratio-pill" id="brew-ratio-pill">Ratio —</div>
         <div class="field" style="margin-top:12px">
-          <label>Grind Size</label>
-          <select id="brew-grind">
-            <option value="">Select grind…</option>
-            <option>Extra Fine</option>
-            <option>Fine</option>
-            <option>Medium Fine</option>
-            <option>Medium</option>
-            <option>Medium Coarse</option>
-            <option>Coarse</option>
-            <option>Extra Coarse</option>
-          </select>
+          <label id="grind-label">Grind Size</label>
+          <div id="grind-field-wrap">
+            <!-- populated by JS based on grind_mode setting -->
+          </div>
         </div>
         <div class="field">
           <label>Notes (optional)</label>
@@ -513,6 +506,13 @@
             <div class="setting-desc">Haptic feedback when timer stopped</div>
           </div>
           <label class="toggle"><input type="checkbox" id="setting-vibrate" checked><span class="toggle-track"></span></label>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="setting-title">Numerical Grind Size</div>
+            <div class="setting-desc">Use click/number input instead of descriptive scale</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="setting-grind-numeric"><span class="toggle-track"></span></label>
         </div>
       </div>
 
@@ -1078,6 +1078,8 @@ async function loadSettings() {
     document.getElementById('setting-default-dose').value = settings['default_dose'];
   document.getElementById('setting-show-ratio').checked = settings['show_ratio'] !== 'false';
   document.getElementById('setting-vibrate').checked = settings['vibrate'] !== 'false';
+  document.getElementById('setting-grind-numeric').checked = settings['grind_numeric'] === 'true';
+  renderGrindField();
 }
 
 document.getElementById('setting-save-btn').addEventListener('click', async () => {
@@ -1086,9 +1088,11 @@ document.getElementById('setting-save-btn').addEventListener('click', async () =
     default_dose:   document.getElementById('setting-default-dose').value,
     show_ratio:     document.getElementById('setting-show-ratio').checked ? 'true' : 'false',
     vibrate:        document.getElementById('setting-vibrate').checked ? 'true' : 'false',
+    grind_numeric:  document.getElementById('setting-grind-numeric').checked ? 'true' : 'false',
   };
   await api('POST', '/api/settings', s);
   settings = { ...settings, ...s };
+  renderGrindField();
   toast('Settings saved!');
 });
 
@@ -1108,6 +1112,55 @@ function escHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════════════
+// Grind field renderer
+// ═══════════════════════════════════════════════════════════
+function renderGrindField() {
+  const wrap = document.getElementById('grind-field-wrap');
+  if (!wrap) return;
+  const numeric = settings['grind_numeric'] === 'true';
+  if (numeric) {
+    // Number input — e.g. clicks on a Comandante
+    wrap.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="number" id="brew-grind" min="1" max="100" step="1"
+          placeholder="e.g. 24"
+          style="flex:1;padding:10px 12px;border:1.5px solid var(--divider);
+                 border-radius:10px;background:var(--parchment);color:var(--espresso);
+                 font-size:14px;font-family:Georgia,serif">
+        <span style="font-size:12px;color:var(--text-muted);white-space:nowrap">clicks / steps</span>
+      </div>`;
+    document.getElementById('brew-grind').addEventListener('focus', function() {
+      this.style.borderColor = 'var(--caramel)';
+    });
+    document.getElementById('brew-grind').addEventListener('blur', function() {
+      this.style.borderColor = 'var(--divider)';
+    });
+  } else {
+    // Descriptive select
+    wrap.innerHTML = `
+      <select id="brew-grind"
+        style="width:100%;padding:10px 12px;border:1.5px solid var(--divider);
+               border-radius:10px;background:var(--parchment);color:var(--espresso);
+               font-size:14px;font-family:Georgia,serif;-webkit-appearance:none">
+        <option value="">Select grind…</option>
+        <option>Extra Fine</option>
+        <option>Fine</option>
+        <option>Medium Fine</option>
+        <option>Medium</option>
+        <option>Medium Coarse</option>
+        <option>Coarse</option>
+        <option>Extra Coarse</option>
+      </select>`;
+    document.getElementById('brew-grind').addEventListener('focus', function() {
+      this.style.borderColor = 'var(--caramel)';
+    });
+    document.getElementById('brew-grind').addEventListener('blur', function() {
+      this.style.borderColor = 'var(--divider)';
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
