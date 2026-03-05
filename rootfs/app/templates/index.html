@@ -440,7 +440,16 @@
         </div>
         <div class="ratio-pill" id="brew-ratio-pill">Ratio —</div>
         <div class="field" style="margin-top:12px">
-          <label id="grind-label">Grind Size</label>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+            <label id="grind-label" style="margin-bottom:0">Grind Size</label>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-family:'Trebuchet MS',sans-serif;font-size:11px;color:var(--text-muted)">Numeric</span>
+              <label class="toggle" style="width:36px;height:22px">
+                <input type="checkbox" id="brew-grind-toggle">
+                <span class="toggle-track" style="border-radius:11px"></span>
+              </label>
+            </div>
+          </div>
           <div id="grind-field-wrap">
             <!-- populated by JS based on grind_mode setting -->
           </div>
@@ -690,7 +699,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-' + tab).classList.add('active');
     btn.classList.add('active');
-    if (tab === 'brew') loadProductsForBrewSelect();
+    if (tab === 'brew') { loadProductsForBrewSelect(); renderGrindField(); }
   });
 });
 
@@ -1121,6 +1130,9 @@ function renderGrindField() {
   const wrap = document.getElementById('grind-field-wrap');
   if (!wrap) return;
   const numeric = settings['grind_numeric'] === 'true';
+  // Sync the inline brew-tab toggle
+  const inlineToggle = document.getElementById('brew-grind-toggle');
+  if (inlineToggle) inlineToggle.checked = numeric;
   if (numeric) {
     // Number input — e.g. clicks on a Comandante
     wrap.innerHTML = `
@@ -1162,6 +1174,17 @@ function renderGrindField() {
     });
   }
 }
+
+// Wire inline grind toggle on brew tab
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'brew-grind-toggle') {
+    settings['grind_numeric'] = e.target.checked ? 'true' : 'false';
+    // Also sync the settings page toggle
+    const settingsToggle = document.getElementById('setting-grind-numeric');
+    if (settingsToggle) settingsToggle.checked = e.target.checked;
+    renderGrindField();
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 // Init
