@@ -6,6 +6,16 @@ from flask import Flask, request, jsonify, render_template, g
 DATABASE = "/data/brewlog.db"
 app = Flask(__name__)
 
+# ── Ingress path stripping ────────────────────────────────────────────────────
+# HA ingress proxies requests with a subpath prefix e.g. /api/hassio_ingress/xxx
+# We strip it so our routes defined as /api/... still match correctly.
+@app.before_request
+def strip_ingress_prefix():
+    ingress_path = request.headers.get("X-Ingress-Path", "").rstrip("/")
+    if ingress_path and request.path.startswith(ingress_path):
+        new_path = request.path[len(ingress_path):] or "/"
+        request.environ["PATH_INFO"] = new_path
+
 # ── Database ──────────────────────────────────────────────────────────────────
 def get_db():
     db = getattr(g, "_database", None)
