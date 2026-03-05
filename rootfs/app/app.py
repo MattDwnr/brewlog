@@ -1,32 +1,10 @@
 import os
 import sqlite3
 from datetime import datetime, timezone
-from flask import Flask, request, jsonify, render_template, g, abort
+from flask import Flask, request, jsonify, render_template, g
 
 DATABASE = "/data/brewlog.db"
 app = Flask(__name__)
-
-# ── Auth ──────────────────────────────────────────────────────────────────────
-def require_auth(f):
-    """
-    Verify request arrives via HA ingress proxy.
-    HA always injects X-Ingress-Path on legitimate ingress requests.
-    Direct external access without going through HA will lack this header.
-    """
-    from functools import wraps
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        # Allow request if it came through HA ingress (header present)
-        # or if running on local network (no Ingress-Path means direct access
-        # which is only possible from inside the Docker network anyway)
-        ingress_path = request.headers.get("X-Ingress-Path")
-        ha_source    = request.headers.get("X-Forwarded-For") or \
-                       request.headers.get("X-Real-IP")
-        # If neither header is present, reject — requires ingress proxy
-        if ingress_path is None and ha_source is None:
-            abort(403)
-        return f(*args, **kwargs)
-    return decorated
 
 # ── Database ──────────────────────────────────────────────────────────────────
 def get_db():
