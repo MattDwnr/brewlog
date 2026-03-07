@@ -1,14 +1,14 @@
 import os
+import io
+import csv
 import sqlite3
 from datetime import datetime, timezone
-from flask import Flask, request, jsonify, render_template, g
+from flask import Flask, request, jsonify, render_template, g, Response
 
 DATABASE = "/data/brewlog.db"
 app = Flask(__name__)
 
 # ── Ingress path stripping ────────────────────────────────────────────────────
-# HA ingress proxies requests with a subpath prefix e.g. /api/hassio_ingress/xxx
-# We strip it so our routes defined as /api/... still match correctly.
 @app.before_request
 def strip_ingress_prefix():
     ingress_path = request.headers.get("X-Ingress-Path", "").rstrip("/")
@@ -58,6 +58,11 @@ def init_db():
             grind_size       TEXT DEFAULT '',
             brew_time_secs   INTEGER DEFAULT 0,
             notes            TEXT DEFAULT '',
+            rating           INTEGER DEFAULT NULL,
+            taste_sour       INTEGER DEFAULT 0,
+            taste_bitter     INTEGER DEFAULT 0,
+            taste_weak       INTEGER DEFAULT 0,
+            taste_strong     INTEGER DEFAULT 0,
             brewed_at        INTEGER DEFAULT (strftime('%s','now'))
         );
         CREATE TABLE IF NOT EXISTS settings (
@@ -65,6 +70,17 @@ def init_db():
             value TEXT
         );
     """)
+    # Migrate existing brews table if columns missing
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(brews)").fetchall()]
+    for col, defn in [
+        ("rating",       "INTEGER DEFAULT NULL"),
+        ("taste_sour",   "INTEGER DEFAULT 0"),
+        ("taste_bitter", "INTEGER DEFAULT 0"),
+        ("taste_weak",   "INTEGER DEFAULT 0"),
+        ("taste_strong", "INTEGER DEFAULT 0"),
+    ]:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE brews ADD COLUMN {col} {defn}")
     conn.commit()
     conn.close()
 
@@ -93,6 +109,22 @@ def ratio_str(coffee, water):
     except Exception:
         pass
     return "—"
+
+def brew_to_dict(b):
+    return {
+        "id": b["id"], "product_id": b["product_id"],
+        "product_name": b["product_name"], "brew_method": b["brew_method"],
+        "coffee_weight_g": b["coffee_weight_g"], "water_weight_g": b["water_weight_g"],
+        "grind_size": b["grind_size"], "brew_time_secs": b["brew_time_secs"],
+        "brew_time_fmt": format_time(b["brew_time_secs"]),
+        "notes": b["notes"],
+        "rating": b["rating"],
+        "taste_sour": b["taste_sour"], "taste_bitter": b["taste_bitter"],
+        "taste_weak": b["taste_weak"], "taste_strong": b["taste_strong"],
+        "brewed_at": b["brewed_at"],
+        "brewed_at_rel": relative_time(b["brewed_at"]),
+        "ratio": ratio_str(b["coffee_weight_g"], b["water_weight_g"]),
+    }
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route("/")
@@ -126,15 +158,7 @@ def get_product(pid):
         "purchase_date": r["purchase_date"], "notes": r["notes"],
         "brew_count": r["brew_count"],
         "last_brewed_rel": relative_time(r["last_brewed_at"]),
-        "brews": [{
-            "id": b["id"], "brew_method": b["brew_method"],
-            "coffee_weight_g": b["coffee_weight_g"], "water_weight_g": b["water_weight_g"],
-            "grind_size": b["grind_size"], "brew_time_secs": b["brew_time_secs"],
-            "brew_time_fmt": format_time(b["brew_time_secs"]),
-            "notes": b["notes"], "brewed_at": b["brewed_at"],
-            "brewed_at_rel": relative_time(b["brewed_at"]),
-            "ratio": ratio_str(b["coffee_weight_g"], b["water_weight_g"]),
-        } for b in brews],
+        "brews": [brew_to_dict(b) for b in brews],
     })
 
 @app.route("/api/products", methods=["POST"])
@@ -176,15 +200,7 @@ def get_brews():
     rows = get_db().execute(
         "SELECT * FROM brews ORDER BY brewed_at DESC LIMIT ?", (limit,)
     ).fetchall()
-    return jsonify([{
-        "id": b["id"], "product_id": b["product_id"], "product_name": b["product_name"],
-        "brew_method": b["brew_method"], "coffee_weight_g": b["coffee_weight_g"],
-        "water_weight_g": b["water_weight_g"], "grind_size": b["grind_size"],
-        "brew_time_secs": b["brew_time_secs"], "brew_time_fmt": format_time(b["brew_time_secs"]),
-        "notes": b["notes"], "brewed_at": b["brewed_at"],
-        "brewed_at_rel": relative_time(b["brewed_at"]),
-        "ratio": ratio_str(b["coffee_weight_g"], b["water_weight_g"]),
-    } for b in rows])
+    return jsonify([brew_to_dict(b) for b in rows])
 
 @app.route("/api/brews", methods=["POST"])
 def add_brew():
@@ -193,13 +209,17 @@ def add_brew():
     now = int(datetime.now(timezone.utc).timestamp())
     cur = db.execute(
         """INSERT INTO brews
-           (product_id,product_name,brew_method,coffee_weight_g,water_weight_g,
-            grind_size,brew_time_secs,notes,brewed_at)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
+           (product_id, product_name, brew_method, coffee_weight_g, water_weight_g,
+            grind_size, brew_time_secs, notes, rating,
+            taste_sour, taste_bitter, taste_weak, taste_strong, brewed_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (d["product_id"], d["product_name"], d["brew_method"],
          d["coffee_weight_g"], d.get("water_weight_g", 0),
          d.get("grind_size",""), d.get("brew_time_secs", 0),
-         d.get("notes","").strip(), now)
+         d.get("notes","").strip(), d.get("rating"),
+         int(bool(d.get("taste_sour"))), int(bool(d.get("taste_bitter"))),
+         int(bool(d.get("taste_weak"))), int(bool(d.get("taste_strong"))),
+         now)
     )
     db.execute(
         "UPDATE products SET last_brewed_at=?, brew_count=brew_count+1 WHERE id=?",
@@ -215,6 +235,64 @@ def delete_brew(bid):
     db.commit()
     return jsonify({"ok": True})
 
+@app.route("/api/suggest/<int:pid>", methods=["GET"])
+def suggest(pid):
+    """Return the best-rated brew params for this product."""
+    db = get_db()
+    # Best rated brews for this product (rating 4-5), most recent first
+    rows = db.execute("""
+        SELECT * FROM brews
+        WHERE product_id=? AND rating IS NOT NULL AND rating >= 4
+        ORDER BY rating DESC, brewed_at DESC
+        LIMIT 5
+    """, (pid,)).fetchall()
+    if not rows:
+        # Fall back to any rated brew
+        rows = db.execute("""
+            SELECT * FROM brews
+            WHERE product_id=? AND rating IS NOT NULL
+            ORDER BY rating DESC, brewed_at DESC
+            LIMIT 3
+        """, (pid,)).fetchall()
+    if not rows:
+        return jsonify({"suggestion": None})
+
+    best = rows[0]
+    # Summarise taste issues from lower-rated brews to give advice
+    bad_rows = db.execute("""
+        SELECT * FROM brews
+        WHERE product_id=? AND rating IS NOT NULL AND rating <= 2
+        ORDER BY brewed_at DESC LIMIT 10
+    """, (pid,)).fetchall()
+
+    tips = []
+    if bad_rows:
+        sour_count    = sum(1 for b in bad_rows if b["taste_sour"])
+        bitter_count  = sum(1 for b in bad_rows if b["taste_bitter"])
+        weak_count    = sum(1 for b in bad_rows if b["taste_weak"])
+        strong_count  = sum(1 for b in bad_rows if b["taste_strong"])
+        if sour_count >= 2:
+            tips.append("Your recent brews taste sour — try a finer grind or longer brew time")
+        if bitter_count >= 2:
+            tips.append("Recent brews taste bitter — try a coarser grind or shorter brew time")
+        if weak_count >= 2:
+            tips.append("Recent brews taste weak — try increasing your dose")
+        if strong_count >= 2:
+            tips.append("Recent brews taste strong — try reducing your dose or adding more water")
+
+    return jsonify({
+        "suggestion": {
+            "brew_method":     best["brew_method"],
+            "coffee_weight_g": best["coffee_weight_g"],
+            "water_weight_g":  best["water_weight_g"],
+            "grind_size":      best["grind_size"],
+            "brew_time_secs":  best["brew_time_secs"],
+            "rating":          best["rating"],
+            "ratio":           ratio_str(best["coffee_weight_g"], best["water_weight_g"]),
+        },
+        "tips": tips,
+    })
+
 @app.route("/api/settings", methods=["GET", "POST"])
 def settings():
     db = get_db()
@@ -225,6 +303,53 @@ def settings():
         return jsonify({"ok": True})
     rows = db.execute("SELECT key,value FROM settings").fetchall()
     return jsonify({r["key"]: r["value"] for r in rows})
+
+@app.route("/api/export/csv", methods=["GET"])
+def export_csv():
+    db = get_db()
+    rows = db.execute("""
+        SELECT
+            b.id, b.product_name, p.brand,
+            b.brew_method, b.coffee_weight_g, b.water_weight_g,
+            b.grind_size, b.brew_time_secs, b.notes,
+            b.rating, b.taste_sour, b.taste_bitter, b.taste_weak, b.taste_strong,
+            datetime(b.brewed_at, 'unixepoch') as brewed_at
+        FROM brews b
+        LEFT JOIN products p ON p.id = b.product_id
+        ORDER BY b.brewed_at DESC
+    """).fetchall()
+
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow([
+        "id", "coffee", "brand", "method",
+        "coffee_g", "water_g", "ratio", "grind_size",
+        "brew_time", "notes", "rating",
+        "sour", "bitter", "weak", "strong", "brewed_at"
+    ])
+    for r in rows:
+        coffee_g = r["coffee_weight_g"] or 0
+        water_g  = r["water_weight_g"] or 0
+        ratio    = f"1:{water_g/coffee_g:.1f}" if coffee_g > 0 and water_g > 0 else ""
+        mins, secs = divmod(r["brew_time_secs"] or 0, 60)
+        writer.writerow([
+            r["id"], r["product_name"], r["brand"] or "",
+            r["brew_method"], coffee_g, water_g, ratio,
+            r["grind_size"] or "", f"{mins}:{secs:02d}",
+            r["notes"] or "", r["rating"] or "",
+            "yes" if r["taste_sour"] else "",
+            "yes" if r["taste_bitter"] else "",
+            "yes" if r["taste_weak"] else "",
+            "yes" if r["taste_strong"] else "",
+            r["brewed_at"],
+        ])
+    csv_bytes = out.getvalue().encode("utf-8")
+    filename = f"brewlog_export_{datetime.now().strftime('%Y%m%d')}.csv"
+    return Response(
+        csv_bytes,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 @app.route("/api/clear", methods=["POST"])
 def clear_all():
