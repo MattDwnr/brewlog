@@ -298,6 +298,41 @@
 
   /* ── Settings ─────────────────────────────────────────────── */
   .settings-section { margin: 16px 16px 0; }
+  /* ── Star rating ── */
+  .star-row { display:flex; gap:6px; margin-top:4px; }
+  .star { font-size:28px; cursor:pointer; color:var(--divider); transition:color .15s; line-height:1; user-select:none; }
+  .star.lit { color:#d4a017; }
+  .star:hover { color:#d4a017; }
+
+  /* ── Taste tags ── */
+  .taste-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .taste-tag {
+    padding:6px 14px; border-radius:20px; font-size:13px; cursor:pointer;
+    border:1.5px solid var(--divider); background:transparent;
+    color:var(--text-muted); transition:all .15s; font-family:Georgia,serif;
+  }
+  .taste-tag.selected { background:var(--medium-roast); color:#fff; border-color:var(--medium-roast); }
+
+  /* ── Suggestion banner ── */
+  .suggest-banner {
+    margin:0 16px 12px; padding:14px 16px; border-radius:14px;
+    background:linear-gradient(135deg,#f5ede0,#ede0cc);
+    border:1px solid var(--caramel); display:none;
+  }
+  .suggest-banner.visible { display:block; }
+  .suggest-title { font-size:12px; font-weight:600; color:var(--medium-roast); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+  .suggest-params { font-size:14px; color:var(--espresso); margin-bottom:4px; }
+  .suggest-tip { font-size:12px; color:var(--medium-roast); margin-top:6px; font-style:italic; }
+  .suggest-apply {
+    display:inline-block; margin-top:8px; padding:5px 14px; border-radius:20px;
+    background:var(--medium-roast); color:#fff; font-size:12px; cursor:pointer; border:none;
+    font-family:Georgia,serif;
+  }
+
+  /* ── Brew card rating display ── */
+  .brew-stars { font-size:12px; color:#d4a017; letter-spacing:1px; }
+  .brew-taste-tags { font-size:11px; color:var(--text-muted); margin-top:2px; }
+
   .settings-section h3 {
     font-family: 'Trebuchet MS', sans-serif; font-size: 10px;
     letter-spacing: .18em; text-transform: uppercase;
@@ -458,9 +493,40 @@
           <label>Notes (optional)</label>
           <textarea id="brew-notes" placeholder="Tasting notes, tweaks…"></textarea>
         </div>
-        <button class="btn btn-primary" style="width:100%;height:48px;font-size:15px;margin-top:4px" id="btn-save-brew">
+        <!-- Rating -->
+        <div class="field" style="margin-top:4px">
+          <label>How was it?</label>
+          <div class="star-row" id="brew-stars">
+            <span class="star" data-val="1">★</span>
+            <span class="star" data-val="2">★</span>
+            <span class="star" data-val="3">★</span>
+            <span class="star" data-val="4">★</span>
+            <span class="star" data-val="5">★</span>
+          </div>
+        </div>
+
+        <!-- Taste notes -->
+        <div class="field" id="taste-field" style="display:none">
+          <label>What was off?</label>
+          <div class="taste-row">
+            <button class="taste-tag" data-taste="sour">Too Sour</button>
+            <button class="taste-tag" data-taste="bitter">Too Bitter</button>
+            <button class="taste-tag" data-taste="weak">Too Weak</button>
+            <button class="taste-tag" data-taste="strong">Too Strong</button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;height:48px;font-size:15px;margin-top:12px" id="btn-save-brew">
           Save Brew
         </button>
+      </div>
+
+      <!-- Suggestion banner -->
+      <div class="suggest-banner" id="suggest-banner">
+        <div class="suggest-title">⭐ Suggested Recipe</div>
+        <div class="suggest-params" id="suggest-params"></div>
+        <div id="suggest-tips"></div>
+        <button class="suggest-apply" id="suggest-apply">Apply this recipe</button>
       </div>
 
       <!-- Recent brews -->
@@ -532,6 +598,13 @@
             <div class="setting-title">Save Settings</div>
           </div>
           <span style="color:var(--medium-roast);font-size:18px">›</span>
+        </div>
+        <div class="settings-row" style="cursor:pointer" id="setting-export-btn">
+          <div>
+            <div class="setting-title">Export Brew History</div>
+            <div class="setting-desc">Download all brews as a CSV file</div>
+          </div>
+          <span style="color:var(--medium-roast);font-size:18px">↓</span>
         </div>
         <div class="settings-row" style="cursor:pointer;border-radius:0 0 14px 14px" id="setting-clear-btn">
           <div>
@@ -657,6 +730,8 @@
 let products = [];
 let recentBrews = [];
 let settings = {};
+let currentRating = 0;
+let suggestion = null;
 let currentEditProduct = null;
 let currentDetailProduct = null;
 let photoDataUrl = null;
@@ -678,6 +753,40 @@ async function api(method, path, body) {
   const res = await fetch(BASE + path, opts);
   return res.json();
 }
+
+// ═══════════════════════════════════════════════════════════
+// Star rating
+// ═══════════════════════════════════════════════════════════
+function setRating(val) {
+  currentRating = (currentRating === val) ? 0 : val; // tap same star to clear
+  document.querySelectorAll('#brew-stars .star').forEach(s => {
+    s.classList.toggle('lit', parseInt(s.dataset.val) <= currentRating);
+  });
+  // Show taste tags only for bad brews
+  document.getElementById('taste-field').style.display =
+    (currentRating > 0 && currentRating <= 2) ? '' : 'none';
+  if (currentRating > 2) {
+    document.querySelectorAll('.taste-tag').forEach(t => t.classList.remove('selected'));
+  }
+}
+
+document.querySelectorAll('#brew-stars .star').forEach(s => {
+  s.addEventListener('click', () => setRating(parseInt(s.dataset.val)));
+  s.addEventListener('mouseenter', () => {
+    document.querySelectorAll('#brew-stars .star').forEach(star => {
+      star.classList.toggle('lit', parseInt(star.dataset.val) <= parseInt(s.dataset.val));
+    });
+  });
+  s.addEventListener('mouseleave', () => {
+    document.querySelectorAll('#brew-stars .star').forEach(star => {
+      star.classList.toggle('lit', parseInt(star.dataset.val) <= currentRating);
+    });
+  });
+});
+
+document.querySelectorAll('.taste-tag').forEach(t => {
+  t.addEventListener('click', () => t.classList.toggle('selected'));
+});
 
 // ═══════════════════════════════════════════════════════════
 // Toast
@@ -986,6 +1095,42 @@ document.getElementById('brew-coffee').addEventListener('input', updateBrewRatio
 document.getElementById('brew-water').addEventListener('input', updateBrewRatio);
 
 // Load products into brew select
+async function fetchSuggestion(productId) {
+  const banner = document.getElementById('suggest-banner');
+  if (!productId) { banner.classList.remove('visible'); return; }
+  const data = await api('GET', `/api/suggest/${productId}`);
+  suggestion = data.suggestion;
+  if (!suggestion) { banner.classList.remove('visible'); return; }
+  const stars = '★'.repeat(suggestion.rating) + '☆'.repeat(5 - suggestion.rating);
+  document.getElementById('suggest-params').innerHTML =
+    `${escHtml(suggestion.brew_method)} · ${suggestion.coffee_weight_g}g · ` +
+    `${suggestion.ratio} · ${escHtml(suggestion.grind_size || '—')} · ` +
+    `${Math.floor(suggestion.brew_time_secs/60)}:${String(suggestion.brew_time_secs%60).padStart(2,'0')} · ` +
+    `<span style="color:#d4a017">${stars}</span>`;
+  const tipsEl = document.getElementById('suggest-tips');
+  tipsEl.innerHTML = (data.tips || []).map(t =>
+    `<div class="suggest-tip">💡 ${escHtml(t)}</div>`).join('');
+  banner.classList.add('visible');
+}
+
+document.getElementById('brew-product').addEventListener('change', e => {
+  fetchSuggestion(e.target.value);
+});
+
+document.getElementById('suggest-apply').addEventListener('click', () => {
+  if (!suggestion) return;
+  document.getElementById('brew-method').value = suggestion.brew_method;
+  document.getElementById('brew-coffee').value = suggestion.coffee_weight_g;
+  document.getElementById('brew-water').value  = suggestion.water_weight_g;
+  // Set grind
+  const grindEl = document.getElementById('brew-grind');
+  if (grindEl) grindEl.value = suggestion.grind_size || '';
+  // Update ratio pill
+  document.getElementById('brew-ratio-pill').textContent =
+    suggestion.ratio !== '—' ? `Ratio ${suggestion.ratio}` : 'Ratio —';
+  toast('Recipe applied! ☕');
+});
+
 async function loadProductsForBrewSelect() {
   const sel = document.getElementById('brew-product');
   const current = sel.value;
@@ -1025,6 +1170,11 @@ document.getElementById('btn-save-brew').addEventListener('click', async () => {
     grind_size: document.getElementById('brew-grind').value,
     brew_time_secs: timerSecs,
     notes: document.getElementById('brew-notes').value.trim(),
+    rating: currentRating || null,
+    taste_sour:   document.querySelector('.taste-tag[data-taste="sour"]')?.classList.contains('selected') ? 1 : 0,
+    taste_bitter: document.querySelector('.taste-tag[data-taste="bitter"]')?.classList.contains('selected') ? 1 : 0,
+    taste_weak:   document.querySelector('.taste-tag[data-taste="weak"]')?.classList.contains('selected') ? 1 : 0,
+    taste_strong: document.querySelector('.taste-tag[data-taste="strong"]')?.classList.contains('selected') ? 1 : 0,
   });
 
   // Reset timer and notes only
@@ -1034,6 +1184,8 @@ document.getElementById('btn-save-brew').addEventListener('click', async () => {
   document.getElementById('btn-start-stop').textContent = 'Start';
   updateTimerDisplay();
   document.getElementById('brew-notes').value = '';
+  setRating(0);
+  document.querySelectorAll('.taste-tag').forEach(t => t.classList.remove('selected'));
 
   toast('Brew saved! ☕');
   await loadProducts();
@@ -1066,6 +1218,9 @@ function renderRecentBrews() {
       <div class="brew-info">
         <div class="brew-coffee">${escHtml(b.product_name)}</div>
         <div class="brew-meta">${b.coffee_weight_g}g · ${escHtml(b.ratio)} · ${escHtml(b.grind_size || '—')}</div>
+        ${b.rating ? `<div class="brew-stars">${'★'.repeat(b.rating)}${'☆'.repeat(5-b.rating)}</div>` : ''}
+        ${[b.taste_sour && 'sour', b.taste_bitter && 'bitter', b.taste_weak && 'weak', b.taste_strong && 'strong'].filter(Boolean).length
+          ? `<div class="brew-taste-tags">${[b.taste_sour && 'sour', b.taste_bitter && 'bitter', b.taste_weak && 'weak', b.taste_strong && 'strong'].filter(Boolean).join(' · ')}</div>` : ''}
         <div class="brew-meta">${escHtml(b.brewed_at_rel)}</div>
       </div>
       <div class="brew-time-col">
@@ -1103,6 +1258,17 @@ document.getElementById('setting-save-btn').addEventListener('click', async () =
   settings = { ...settings, ...s };
   renderGrindField();
   toast('Settings saved!');
+});
+
+document.getElementById('setting-export-btn').addEventListener('click', () => {
+  // Trigger download via a temporary anchor pointing to the export endpoint
+  const a = document.createElement('a');
+  a.href = BASE + '/api/export/csv';
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast('Export started!');
 });
 
 document.getElementById('setting-clear-btn').addEventListener('click', async () => {
