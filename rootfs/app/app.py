@@ -228,6 +228,26 @@ def add_brew():
     db.commit()
     return jsonify({"id": cur.lastrowid}), 201
 
+@app.route("/api/brews/<int:bid>", methods=["PUT"])
+def update_brew(bid):
+    d = request.json
+    db = get_db()
+    db.execute("""
+        UPDATE brews SET
+            brew_method=?, coffee_weight_g=?, water_weight_g=?,
+            grind_size=?, brew_time_secs=?, notes=?,
+            rating=?, taste_sour=?, taste_bitter=?, taste_weak=?, taste_strong=?
+        WHERE id=?""",
+        (d.get("brew_method"), d.get("coffee_weight_g"), d.get("water_weight_g", 0),
+         d.get("grind_size", ""), d.get("brew_time_secs", 0),
+         d.get("notes", "").strip(), d.get("rating"),
+         int(bool(d.get("taste_sour"))), int(bool(d.get("taste_bitter"))),
+         int(bool(d.get("taste_weak"))), int(bool(d.get("taste_strong"))),
+         bid)
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
 @app.route("/api/brews/<int:bid>", methods=["DELETE"])
 def delete_brew(bid):
     db = get_db()
@@ -291,6 +311,92 @@ def suggest(pid):
             "ratio":           ratio_str(best["coffee_weight_g"], best["water_weight_g"]),
         },
         "tips": tips,
+    })
+
+
+@app.route("/api/stats", methods=["GET"])
+def get_stats():
+    db = get_db()
+    from calendar import monthrange
+    now = datetime.now(timezone.utc)
+    # Month boundaries
+    month_start = int(datetime(now.year, now.month, 1, tzinfo=timezone.utc).timestamp())
+    _, last_day = monthrange(now.year, now.month)
+    month_end   = int(datetime(now.year, now.month, last_day, 23, 59, 59, tzinfo=timezone.utc).timestamp())
+    # All-time
+    totals = db.execute("""
+        SELECT
+            COUNT(*)                        AS total_brews,
+            COALESCE(SUM(coffee_weight_g),0) AS total_coffee_g,
+            COALESCE(AVG(coffee_weight_g),0) AS avg_dose_g,
+            COALESCE(AVG(CASE WHEN water_weight_g > 0 AND coffee_weight_g > 0
+                THEN water_weight_g/coffee_weight_g END),0) AS avg_ratio,
+            COALESCE(AVG(CASE WHEN rating IS NOT NULL THEN rating END),0) AS avg_rating,
+            COUNT(DISTINCT product_id)      AS unique_coffees_brewed
+        FROM brews
+    """).fetchone()
+    # This month
+    month = db.execute("""
+        SELECT
+            COUNT(*)                        AS brews,
+            COALESCE(SUM(coffee_weight_g),0) AS coffee_g,
+            COUNT(DISTINCT product_id)      AS unique_coffees,
+            COUNT(DISTINCT brew_method)     AS unique_methods
+        FROM brews
+        WHERE brewed_at BETWEEN ? AND ?
+    """, (month_start, month_end)).fetchone()
+    # Favourite method (all time)
+    fav_method = db.execute("""
+        SELECT brew_method, COUNT(*) AS n FROM brews
+        GROUP BY brew_method ORDER BY n DESC LIMIT 1
+    """).fetchone()
+    # Favourite coffee (all time)
+    fav_coffee = db.execute("""
+        SELECT product_name, COUNT(*) AS n FROM brews
+        GROUP BY product_id ORDER BY n DESC LIMIT 1
+    """).fetchone()
+    # Brews per day-of-week (0=Mon … 6=Sun) for the bar sparkline
+    dow = db.execute("""
+        SELECT CAST(strftime('%w', datetime(brewed_at,'unixepoch')) AS INTEGER) AS dow,
+               COUNT(*) AS n
+        FROM brews GROUP BY dow
+    """).fetchall()
+    dow_map = {0:0,1:0,2:0,3:0,4:0,5:0,6:0}  # Sun=0 in SQLite
+    for r in dow:
+        dow_map[r["dow"]] = r["n"]
+    # Reorder Mon–Sun (SQLite Sun=0)
+    dow_ordered = [dow_map[i] for i in [1,2,3,4,5,6,0]]
+    # Monthly brew counts for last 6 months
+    monthly = []
+    for i in range(5, -1, -1):
+        mo = now.month - i
+        yr = now.year
+        while mo < 1:
+            mo += 12; yr -= 1
+        ms = int(datetime(yr, mo, 1, tzinfo=timezone.utc).timestamp())
+        _, ld = monthrange(yr, mo)
+        me = int(datetime(yr, mo, ld, 23, 59, 59, tzinfo=timezone.utc).timestamp())
+        row = db.execute("SELECT COUNT(*) AS n FROM brews WHERE brewed_at BETWEEN ? AND ?", (ms, me)).fetchone()
+        monthly.append({"month": datetime(yr, mo, 1).strftime("%b"), "brews": row["n"]})
+    return jsonify({
+        "month": {
+            "brews":          month["brews"],
+            "coffee_g":       round(month["coffee_g"], 1),
+            "unique_coffees": month["unique_coffees"],
+            "unique_methods": month["unique_methods"],
+        },
+        "alltime": {
+            "total_brews":          totals["total_brews"],
+            "total_coffee_kg":      round(totals["total_coffee_g"] / 1000, 2),
+            "avg_dose_g":           round(totals["avg_dose_g"], 1),
+            "avg_ratio":            f"1:{totals['avg_ratio']:.1f}" if totals["avg_ratio"] > 0 else "—",
+            "avg_rating":           round(totals["avg_rating"], 1) if totals["avg_rating"] else None,
+            "unique_coffees_brewed": totals["unique_coffees_brewed"],
+        },
+        "fav_method": fav_method["brew_method"] if fav_method else None,
+        "fav_coffee": fav_coffee["product_name"] if fav_coffee else None,
+        "dow":        dow_ordered,
+        "monthly":    monthly,
     })
 
 @app.route("/api/settings", methods=["GET", "POST"])

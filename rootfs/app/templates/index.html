@@ -99,6 +99,81 @@
   .nav-btn.active { color: var(--medium-roast); font-weight: bold; }
 
   /* ── Cards ────────────────────────────────────────────────── */
+  /* ── Stats dashboard ── */
+  .stats-wrap { padding: 0 16px 4px; }
+  .stats-month-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .stats-month-title {
+    font-family: Georgia, serif; font-size: 16px;
+    font-weight: bold; color: var(--espresso);
+  }
+  .stats-month-sub {
+    font-family: 'Trebuchet MS', sans-serif;
+    font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em;
+  }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .stat-tile {
+    background: var(--cream); border-radius: 14px;
+    padding: 14px 14px 12px; border: 1px solid var(--divider);
+  }
+  .stat-val {
+    font-family: Georgia, serif; font-size: 26px;
+    font-weight: bold; color: var(--espresso); line-height: 1;
+  }
+  .stat-val.big { font-size: 22px; }
+  .stat-lbl {
+    font-family: 'Trebuchet MS', sans-serif;
+    font-size: 11px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .06em; margin-top: 4px;
+  }
+  .stats-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .stats-row .stat-tile { flex: 1; }
+  .stats-bar-wrap { margin-bottom: 10px; }
+  .stats-bar-card {
+    background: var(--cream); border-radius: 14px;
+    padding: 14px; border: 1px solid var(--divider);
+  }
+  .bar-chart-title {
+    font-family: 'Trebuchet MS', sans-serif; font-size: 11px;
+    color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 10px;
+  }
+  .bar-chart { display: flex; align-items: flex-end; gap: 5px; height: 52px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--caramel);
+         transition: height .4s ease; min-height: 3px; }
+  .bar.highlight { background: var(--medium-roast); }
+  .bar-lbl { font-size: 10px; color: var(--text-muted); font-family: 'Trebuchet MS',sans-serif; }
+  .stats-alltime-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .stat-tile-sm {
+    background: var(--cream); border-radius: 12px;
+    padding: 10px 12px; border: 1px solid var(--divider);
+  }
+  .stat-tile-sm .stat-val { font-size: 18px; }
+  .stat-tile-sm .stat-lbl { font-size: 10px; }
+  .stats-highlight {
+    background: linear-gradient(135deg, #f5ede0, #ede0cc);
+    border-radius: 14px; padding: 14px; border: 1px solid var(--caramel);
+    margin-bottom: 10px; display: flex; gap: 16px;
+  }
+  .stats-highlight-item { flex: 1; }
+  .stats-highlight-label {
+    font-family: 'Trebuchet MS', sans-serif; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .06em;
+    color: var(--medium-roast); margin-bottom: 3px;
+  }
+  .stats-highlight-val {
+    font-family: Georgia, serif; font-size: 14px;
+    color: var(--espresso); font-weight: bold;
+  }
+  .stats-section-label {
+    font-family: 'Trebuchet MS', sans-serif; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .12em;
+    color: var(--caramel); margin: 16px 0 8px; padding: 0 2px;
+  }
+
   .card {
     background: var(--steam);
     border-radius: var(--radius-card);
@@ -408,6 +483,90 @@
       <div class="eyebrow">BrewLog</div>
       <h1>My Coffees</h1>
     </div>
+
+    <!-- Stats dashboard -->
+    <div id="stats-dashboard" style="display:none; padding:0 0 4px">
+      <div class="stats-wrap">
+
+        <!-- This month -->
+        <div class="stats-month-header">
+          <span class="stats-month-title" id="stats-month-name"></span>
+          <span class="stats-month-sub">This month</span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-tile">
+            <div class="stat-val" id="stat-month-brews">—</div>
+            <div class="stat-lbl">Brews</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-val big" id="stat-month-coffee">—</div>
+            <div class="stat-lbl">Grams brewed</div>
+          </div>
+        </div>
+        <div class="stats-row">
+          <div class="stat-tile">
+            <div class="stat-val" id="stat-month-coffees">—</div>
+            <div class="stat-lbl">Coffees used</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-val" id="stat-month-methods">—</div>
+            <div class="stat-lbl">Methods tried</div>
+          </div>
+        </div>
+
+        <!-- Favourites highlight -->
+        <div class="stats-highlight" id="stats-highlight" style="display:none">
+          <div class="stats-highlight-item">
+            <div class="stats-highlight-label">Favourite Method</div>
+            <div class="stats-highlight-val" id="stat-fav-method">—</div>
+          </div>
+          <div style="width:1px;background:var(--divider)"></div>
+          <div class="stats-highlight-item">
+            <div class="stats-highlight-label">Most Brewed</div>
+            <div class="stats-highlight-val" id="stat-fav-coffee">—</div>
+          </div>
+        </div>
+
+        <!-- Monthly bar chart -->
+        <div class="stats-bar-wrap">
+          <div class="stats-bar-card">
+            <div class="bar-chart-title">Brews per month</div>
+            <div class="bar-chart" id="monthly-bar-chart"></div>
+          </div>
+        </div>
+
+        <!-- All-time stats -->
+        <div class="stats-section-label">All Time</div>
+        <div class="stats-alltime-grid">
+          <div class="stat-tile-sm">
+            <div class="stat-val" id="stat-total-brews">—</div>
+            <div class="stat-lbl">Total brews</div>
+          </div>
+          <div class="stat-tile-sm">
+            <div class="stat-val" id="stat-total-kg">—</div>
+            <div class="stat-lbl">kg brewed</div>
+          </div>
+          <div class="stat-tile-sm">
+            <div class="stat-val" id="stat-avg-dose">—</div>
+            <div class="stat-lbl">Avg dose (g)</div>
+          </div>
+          <div class="stat-tile-sm">
+            <div class="stat-val" id="stat-avg-ratio">—</div>
+            <div class="stat-lbl">Avg ratio</div>
+          </div>
+          <div class="stat-tile-sm">
+            <div class="stat-val" id="stat-avg-rating">—</div>
+            <div class="stat-lbl">Avg rating</div>
+          </div>
+          <div class="stat-tile-sm">
+            <div class="stat-val" id="stat-unique-coffees">—</div>
+            <div class="stat-lbl">Coffees tried</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <div id="products-list">
       <div class="empty-state" id="products-empty" style="display:none">
         ☕ No coffees added yet.<br>Tap + to add your first.
@@ -818,6 +977,66 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 async function loadProducts() {
   products = await api('GET', '/api/products');
   renderProducts();
+  loadStats();
+}
+
+async function loadStats() {
+  const s = await api('GET', '/api/stats');
+  const dashboard = document.getElementById('stats-dashboard');
+
+  // Only show if we have any data
+  if (s.alltime.total_brews === 0) {
+    dashboard.style.display = 'none';
+    return;
+  }
+  dashboard.style.display = '';
+
+  // Month name
+  const monthNames = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+  document.getElementById('stats-month-name').textContent =
+    monthNames[new Date().getMonth()];
+
+  // This month
+  document.getElementById('stat-month-brews').textContent   = s.month.brews;
+  document.getElementById('stat-month-coffee').textContent  =
+    s.month.coffee_g >= 1000
+      ? (s.month.coffee_g / 1000).toFixed(2) + ' kg'
+      : s.month.coffee_g + 'g';
+  document.getElementById('stat-month-coffees').textContent = s.month.unique_coffees;
+  document.getElementById('stat-month-methods').textContent = s.month.unique_methods;
+
+  // Favourites
+  if (s.fav_method || s.fav_coffee) {
+    document.getElementById('stats-highlight').style.display = '';
+    document.getElementById('stat-fav-method').textContent = s.fav_method || '—';
+    document.getElementById('stat-fav-coffee').textContent = s.fav_coffee || '—';
+  }
+
+  // Monthly bar chart
+  const chartEl = document.getElementById('monthly-bar-chart');
+  chartEl.innerHTML = '';
+  const maxVal = Math.max(...s.monthly.map(m => m.brews), 1);
+  const currentMonth = new Date().toLocaleDateString('en-GB', { month: 'short' });
+  s.monthly.forEach(m => {
+    const pct = Math.round((m.brews / maxVal) * 100);
+    const isNow = m.month === currentMonth;
+    const col = document.createElement('div');
+    col.className = 'bar-col';
+    col.innerHTML = `
+      <div class="bar${isNow ? ' highlight' : ''}" style="height:${Math.max(pct * 0.48, m.brews > 0 ? 6 : 3)}px"></div>
+      <div class="bar-lbl">${m.month}</div>`;
+    chartEl.appendChild(col);
+  });
+
+  // All time
+  document.getElementById('stat-total-brews').textContent   = s.alltime.total_brews;
+  document.getElementById('stat-total-kg').textContent      = s.alltime.total_coffee_kg;
+  document.getElementById('stat-avg-dose').textContent      = s.alltime.avg_dose_g;
+  document.getElementById('stat-avg-ratio').textContent     = s.alltime.avg_ratio;
+  document.getElementById('stat-avg-rating').textContent    =
+    s.alltime.avg_rating ? '★ ' + s.alltime.avg_rating : '—';
+  document.getElementById('stat-unique-coffees').textContent = s.alltime.unique_coffees_brewed;
 }
 
 function renderProducts() {
@@ -1223,9 +1442,10 @@ function renderRecentBrews() {
           ? `<div class="brew-taste-tags">${[b.taste_sour && 'sour', b.taste_bitter && 'bitter', b.taste_weak && 'weak', b.taste_strong && 'strong'].filter(Boolean).join(' · ')}</div>` : ''}
         <div class="brew-meta">${escHtml(b.brewed_at_rel)}</div>
       </div>
-      <div class="brew-time-col">
+      <div class="brew-time-col" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
         <div class="brew-time">${b.brew_time_fmt}</div>
         <div class="brew-time-label">time</div>
+        <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 10px;margin-top:4px" onclick="openBrewEdit(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit</button>
       </div>`;
     list.appendChild(div);
   });
@@ -1340,6 +1560,120 @@ function renderGrindField() {
     });
   }
 }
+
+// ═══════════════════════════════════════════════════════════
+// Edit Brew Modal
+// ═══════════════════════════════════════════════════════════
+let currentEditBrew = null;
+let editBrewRating = 0;
+
+function secsToDisplay(s) {
+  s = parseInt(s) || 0;
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+
+function displayToSecs(str) {
+  str = (str || '').trim();
+  if (str.includes(':')) {
+    const [m, s] = str.split(':').map(Number);
+    return (m * 60) + (s || 0);
+  }
+  return parseInt(str) || 0;
+}
+
+function setEditRating(val) {
+  editBrewRating = (editBrewRating === val) ? 0 : val;
+  document.querySelectorAll('#edit-brew-stars .star').forEach(s => {
+    s.classList.toggle('lit', parseInt(s.dataset.val) <= editBrewRating);
+  });
+  document.getElementById('edit-taste-field').style.display =
+    (editBrewRating > 0 && editBrewRating <= 2) ? '' : 'none';
+  if (editBrewRating > 2) {
+    document.querySelectorAll('#modal-brew-edit .taste-tag').forEach(t => t.classList.remove('selected'));
+  }
+}
+
+document.querySelectorAll('#edit-brew-stars .star').forEach(s => {
+  s.addEventListener('click', () => setEditRating(parseInt(s.dataset.val)));
+  s.addEventListener('mouseenter', () => {
+    document.querySelectorAll('#edit-brew-stars .star').forEach(star => {
+      star.classList.toggle('lit', parseInt(star.dataset.val) <= parseInt(s.dataset.val));
+    });
+  });
+  s.addEventListener('mouseleave', () => {
+    document.querySelectorAll('#edit-brew-stars .star').forEach(star => {
+      star.classList.toggle('lit', parseInt(star.dataset.val) <= editBrewRating);
+    });
+  });
+});
+
+document.querySelectorAll('#modal-brew-edit .taste-tag').forEach(t => {
+  t.addEventListener('click', () => t.classList.toggle('selected'));
+});
+
+function openBrewEdit(brew) {
+  currentEditBrew = brew;
+  document.getElementById('edit-brew-method').value  = brew.brew_method || '';
+  document.getElementById('edit-brew-coffee').value  = brew.coffee_weight_g || '';
+  document.getElementById('edit-brew-water').value   = brew.water_weight_g || '';
+  document.getElementById('edit-brew-grind').value   = brew.grind_size || '';
+  document.getElementById('edit-brew-time').value    = secsToDisplay(brew.brew_time_secs);
+  document.getElementById('edit-brew-notes').value   = brew.notes || '';
+  // Rating
+  editBrewRating = brew.rating || 0;
+  document.querySelectorAll('#edit-brew-stars .star').forEach(s => {
+    s.classList.toggle('lit', parseInt(s.dataset.val) <= editBrewRating);
+  });
+  // Taste tags
+  const showTaste = editBrewRating > 0 && editBrewRating <= 2;
+  document.getElementById('edit-taste-field').style.display = showTaste ? '' : 'none';
+  document.querySelector('#modal-brew-edit .taste-tag[data-taste="sour"]').classList.toggle('selected', !!brew.taste_sour);
+  document.querySelector('#modal-brew-edit .taste-tag[data-taste="bitter"]').classList.toggle('selected', !!brew.taste_bitter);
+  document.querySelector('#modal-brew-edit .taste-tag[data-taste="weak"]').classList.toggle('selected', !!brew.taste_weak);
+  document.querySelector('#modal-brew-edit .taste-tag[data-taste="strong"]').classList.toggle('selected', !!brew.taste_strong);
+  document.getElementById('modal-brew-edit').classList.add('open');
+}
+
+function closeBrewEdit() {
+  document.getElementById('modal-brew-edit').classList.remove('open');
+  currentEditBrew = null;
+}
+
+document.getElementById('modal-brew-edit-close').addEventListener('click', closeBrewEdit);
+document.getElementById('modal-brew-edit').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeBrewEdit();
+});
+
+document.getElementById('btn-update-brew').addEventListener('click', async () => {
+  if (!currentEditBrew) return;
+  await api('PUT', `/api/brews/${currentEditBrew.id}`, {
+    brew_method:     document.getElementById('edit-brew-method').value,
+    coffee_weight_g: parseFloat(document.getElementById('edit-brew-coffee').value) || 0,
+    water_weight_g:  parseFloat(document.getElementById('edit-brew-water').value) || 0,
+    grind_size:      document.getElementById('edit-brew-grind').value.trim(),
+    brew_time_secs:  displayToSecs(document.getElementById('edit-brew-time').value),
+    notes:           document.getElementById('edit-brew-notes').value.trim(),
+    rating:          editBrewRating || null,
+    taste_sour:      document.querySelector('#modal-brew-edit .taste-tag[data-taste="sour"]').classList.contains('selected') ? 1 : 0,
+    taste_bitter:    document.querySelector('#modal-brew-edit .taste-tag[data-taste="bitter"]').classList.contains('selected') ? 1 : 0,
+    taste_weak:      document.querySelector('#modal-brew-edit .taste-tag[data-taste="weak"]').classList.contains('selected') ? 1 : 0,
+    taste_strong:    document.querySelector('#modal-brew-edit .taste-tag[data-taste="strong"]').classList.contains('selected') ? 1 : 0,
+  });
+  closeBrewEdit();
+  await loadRecentBrews();
+  await loadProducts();
+  toast('Brew updated!');
+});
+
+document.getElementById('btn-delete-brew').addEventListener('click', async () => {
+  if (!currentEditBrew) return;
+  if (!confirm('Delete this brew? This cannot be undone.')) return;
+  await api('DELETE', `/api/brews/${currentEditBrew.id}`);
+  closeBrewEdit();
+  await loadRecentBrews();
+  await loadProducts();
+  toast('Brew deleted');
+});
 
 // Wire inline grind toggle on brew tab
 document.addEventListener('change', e => {

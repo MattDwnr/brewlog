@@ -1,6 +1,6 @@
 name: "BrewLog"
 description: "Track your coffee products and brew sessions"
-version: "1.1.0"
+version: "1.4.0"
 slug: "brewlog"
 init: false
 arch:
