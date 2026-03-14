@@ -622,6 +622,26 @@
             <option>V60</option>
           </select>
         </div>
+
+        <!-- Portafilter — shown only for Espresso / Moka Pot -->
+        <div class="field" id="portafilter-field" style="display:none">
+          <label>Portafilter</label>
+          <div style="display:flex;gap:10px">
+            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;
+                          border:1.5px solid var(--divider);border-radius:10px;cursor:pointer;
+                          background:var(--parchment)" id="pf-unpressurised-label">
+              <input type="radio" name="portafilter" id="pf-unpressurised" value="Unpressurised" style="accent-color:var(--medium-roast)">
+              <span style="font-size:14px;color:var(--espresso)">Unpressurised</span>
+            </label>
+            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;
+                          border:1.5px solid var(--divider);border-radius:10px;cursor:pointer;
+                          background:var(--parchment)" id="pf-pressurised-label">
+              <input type="radio" name="portafilter" id="pf-pressurised" value="Pressurised" style="accent-color:var(--medium-roast)">
+              <span style="font-size:14px;color:var(--espresso)">Pressurised</span>
+            </label>
+          </div>
+        </div>
+
         <div class="field-row">
           <div class="field">
             <label>Coffee (g)</label>
@@ -1313,6 +1333,18 @@ function updateBrewRatio() {
 document.getElementById('brew-coffee').addEventListener('input', updateBrewRatio);
 document.getElementById('brew-water').addEventListener('input', updateBrewRatio);
 
+// Show portafilter field only for espresso-style methods
+const PORTAFILTER_METHODS = ['Espresso', 'Moka Pot'];
+function updatePortafilterVisibility() {
+  const method = document.getElementById('brew-method').value;
+  const field  = document.getElementById('portafilter-field');
+  field.style.display = PORTAFILTER_METHODS.includes(method) ? '' : 'none';
+  if (!PORTAFILTER_METHODS.includes(method)) {
+    document.querySelectorAll('input[name="portafilter"]').forEach(r => r.checked = false);
+  }
+}
+document.getElementById('brew-method').addEventListener('change', updatePortafilterVisibility);
+
 // Load products into brew select
 async function fetchSuggestion(productId) {
   const banner = document.getElementById('suggest-banner');
@@ -1389,6 +1421,7 @@ document.getElementById('btn-save-brew').addEventListener('click', async () => {
     grind_size: document.getElementById('brew-grind').value,
     brew_time_secs: timerSecs,
     notes: document.getElementById('brew-notes').value.trim(),
+    portafilter: document.querySelector('input[name="portafilter"]:checked')?.value || '',
     rating: currentRating || null,
     taste_sour:   document.querySelector('.taste-tag[data-taste="sour"]')?.classList.contains('selected') ? 1 : 0,
     taste_bitter: document.querySelector('.taste-tag[data-taste="bitter"]')?.classList.contains('selected') ? 1 : 0,
@@ -1403,6 +1436,7 @@ document.getElementById('btn-save-brew').addEventListener('click', async () => {
   document.getElementById('btn-start-stop').textContent = 'Start';
   updateTimerDisplay();
   document.getElementById('brew-notes').value = '';
+  document.querySelectorAll('input[name="portafilter"]').forEach(r => r.checked = false);
   setRating(0);
   document.querySelectorAll('.taste-tag').forEach(t => t.classList.remove('selected'));
 
@@ -1436,7 +1470,7 @@ function renderRecentBrews() {
       <div class="method-badge">${escHtml(b.brew_method)}</div>
       <div class="brew-info">
         <div class="brew-coffee">${escHtml(b.product_name)}</div>
-        <div class="brew-meta">${b.coffee_weight_g}g · ${escHtml(b.ratio)} · ${escHtml(b.grind_size || '—')}</div>
+        <div class="brew-meta">${b.coffee_weight_g}g · ${escHtml(b.ratio)} · ${escHtml(b.grind_size || '—')}${b.portafilter ? ' · ' + escHtml(b.portafilter) : ''}</div>
         ${b.rating ? `<div class="brew-stars">${'★'.repeat(b.rating)}${'☆'.repeat(5-b.rating)}</div>` : ''}
         ${[b.taste_sour && 'sour', b.taste_bitter && 'bitter', b.taste_weak && 'weak', b.taste_strong && 'strong'].filter(Boolean).length
           ? `<div class="brew-taste-tags">${[b.taste_sour && 'sour', b.taste_bitter && 'bitter', b.taste_weak && 'weak', b.taste_strong && 'strong'].filter(Boolean).join(' · ')}</div>` : ''}
@@ -1614,6 +1648,12 @@ document.querySelectorAll('#modal-brew-edit .taste-tag').forEach(t => {
 function openBrewEdit(brew) {
   currentEditBrew = brew;
   document.getElementById('edit-brew-method').value  = brew.brew_method || '';
+  // Portafilter visibility + selection
+  const editPfField = document.getElementById('edit-portafilter-field');
+  editPfField.style.display = PORTAFILTER_METHODS.includes(brew.brew_method) ? '' : 'none';
+  document.querySelectorAll('input[name="edit-portafilter"]').forEach(r => {
+    r.checked = r.value === (brew.portafilter || '');
+  });
   document.getElementById('edit-brew-coffee').value  = brew.coffee_weight_g || '';
   document.getElementById('edit-brew-water').value   = brew.water_weight_g || '';
   document.getElementById('edit-brew-grind').value   = brew.grind_size || '';
@@ -1639,6 +1679,14 @@ function closeBrewEdit() {
   currentEditBrew = null;
 }
 
+document.getElementById('edit-brew-method').addEventListener('change', function() {
+  const editPfField = document.getElementById('edit-portafilter-field');
+  editPfField.style.display = PORTAFILTER_METHODS.includes(this.value) ? '' : 'none';
+  if (!PORTAFILTER_METHODS.includes(this.value)) {
+    document.querySelectorAll('input[name="edit-portafilter"]').forEach(r => r.checked = false);
+  }
+});
+
 document.getElementById('modal-brew-edit-close').addEventListener('click', closeBrewEdit);
 document.getElementById('modal-brew-edit').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeBrewEdit();
@@ -1653,6 +1701,7 @@ document.getElementById('btn-update-brew').addEventListener('click', async () =>
     grind_size:      document.getElementById('edit-brew-grind').value.trim(),
     brew_time_secs:  displayToSecs(document.getElementById('edit-brew-time').value),
     notes:           document.getElementById('edit-brew-notes').value.trim(),
+    portafilter:     document.querySelector('input[name="edit-portafilter"]:checked')?.value || '',
     rating:          editBrewRating || null,
     taste_sour:      document.querySelector('#modal-brew-edit .taste-tag[data-taste="sour"]').classList.contains('selected') ? 1 : 0,
     taste_bitter:    document.querySelector('#modal-brew-edit .taste-tag[data-taste="bitter"]').classList.contains('selected') ? 1 : 0,
