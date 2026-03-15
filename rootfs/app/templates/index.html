@@ -860,6 +860,100 @@
   </nav>
 </div>
 
+<!-- ═══ MODAL: Edit Brew ═══ -->
+<div class="modal-overlay" id="modal-brew-edit">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Edit Brew</span>
+      <button class="modal-close" id="modal-brew-edit-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Brew Method</label>
+        <select id="edit-brew-method">
+          <option>Aeropress</option><option>Espresso</option><option>Pour Over</option>
+          <option>French Press</option><option>Moka Pot</option><option>Cold Brew</option>
+          <option>Chemex</option><option>V60</option>
+        </select>
+      </div>
+      <div class="field" id="edit-portafilter-field" style="display:none">
+        <label>Portafilter</label>
+        <div style="display:flex;gap:10px">
+          <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;
+                        border:1.5px solid var(--divider);border-radius:10px;cursor:pointer;
+                        background:var(--parchment)">
+            <input type="radio" name="edit-portafilter" id="edit-pf-unpressurised" value="Unpressurised" style="accent-color:var(--medium-roast)">
+            <span style="font-size:14px;color:var(--espresso)">Unpressurised</span>
+          </label>
+          <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;
+                        border:1.5px solid var(--divider);border-radius:10px;cursor:pointer;
+                        background:var(--parchment)">
+            <input type="radio" name="edit-portafilter" id="edit-pf-pressurised" value="Pressurised" style="accent-color:var(--medium-roast)">
+            <span style="font-size:14px;color:var(--espresso)">Pressurised</span>
+          </label>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Coffee (g)</label>
+          <input type="number" id="edit-brew-coffee" step="0.1" min="0">
+        </div>
+        <div class="field">
+          <label>Water (g)</label>
+          <input type="number" id="edit-brew-water" step="1" min="0">
+        </div>
+      </div>
+      <div class="field">
+        <label>Grind Size</label>
+        <input type="text" id="edit-brew-grind" placeholder="e.g. Medium or 24">
+      </div>
+      <div class="field">
+        <label>Brew Time (mm:ss or seconds)</label>
+        <input type="text" id="edit-brew-time" placeholder="e.g. 2:30 or 150">
+      </div>
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="edit-brew-notes" placeholder="Tasting notes, tweaks…"></textarea>
+      </div>
+      <div class="field">
+        <label>Rating</label>
+        <div class="star-row" id="edit-brew-stars">
+          <span class="star" data-val="1">★</span>
+          <span class="star" data-val="2">★</span>
+          <span class="star" data-val="3">★</span>
+          <span class="star" data-val="4">★</span>
+          <span class="star" data-val="5">★</span>
+        </div>
+      </div>
+      <div class="field" id="edit-taste-field">
+        <label>What was off?</label>
+        <div class="taste-row">
+          <button class="taste-tag" data-taste="sour">Too Sour</button>
+          <button class="taste-tag" data-taste="bitter">Too Bitter</button>
+          <button class="taste-tag" data-taste="weak">Too Weak</button>
+          <button class="taste-tag" data-taste="strong">Too Strong</button>
+        </div>
+      </div>
+      <div class="failed-brew-row">
+        <div class="failed-brew-label">
+          Brew Failed?
+          <small>e.g. choked machine, knocked over</small>
+        </div>
+        <label class="toggle"><input type="checkbox" id="edit-brew-failed"><span class="toggle-track"></span></label>
+      </div>
+      <div class="field" id="edit-fail-reason-field" style="display:none">
+        <label>Reason (optional)</label>
+        <input type="text" id="edit-brew-fail-reason" placeholder="e.g. Grind too fine, choked the machine">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn btn-outline" style="flex:1;height:44px;color:var(--error);border-color:var(--error)" id="btn-delete-brew">Delete</button>
+        <button class="btn btn-primary" style="flex:2;height:44px" id="btn-update-brew">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MODAL: Add / Edit Product ═══ -->
 <div class="modal-overlay" id="modal-product">
   <div class="modal">
