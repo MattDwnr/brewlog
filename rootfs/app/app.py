@@ -484,6 +484,8 @@ def clear_all():
     db.commit()
     return jsonify({"ok": True})
 
+# Initialise DB on import so gunicorn picks it up (not just __main__)
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=8099, debug=False)

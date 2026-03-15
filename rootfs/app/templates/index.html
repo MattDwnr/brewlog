@@ -1600,10 +1600,10 @@ function escHtml(str) {
 function renderGrindField() {
   const wrap = document.getElementById('grind-field-wrap');
   if (!wrap) return;
-  // Read from both sources — inline toggle wins if present, else settings
+  // Always derive from settings — the source of truth
+  const numeric = settings['grind_numeric'] === 'true';
+  // Sync both toggles to match settings
   const inlineToggle = document.getElementById('brew-grind-toggle');
-  const numeric = inlineToggle ? inlineToggle.checked : (settings['grind_numeric'] === 'true');
-  // Keep both toggles in sync
   if (inlineToggle) inlineToggle.checked = numeric;
   const settingsToggle = document.getElementById('setting-grind-numeric');
   if (settingsToggle) settingsToggle.checked = numeric;
@@ -1781,7 +1781,6 @@ document.getElementById('btn-delete-brew').addEventListener('click', async () =>
 // Wire inline grind toggle on brew tab
 document.addEventListener('change', e => {
   if (e.target && e.target.id === 'brew-grind-toggle') {
-    // Update settings state then re-render — renderGrindField reads from toggle directly
     settings['grind_numeric'] = e.target.checked ? 'true' : 'false';
     renderGrindField();
   }
