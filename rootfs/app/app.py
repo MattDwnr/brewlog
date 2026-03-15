@@ -140,6 +140,17 @@ def brew_to_dict(b):
 def index():
     return render_template("index.html")
 
+@app.route("/api/ping")
+def ping():
+    """Health check — confirms Flask is reachable and DB is accessible."""
+    try:
+        db = get_db()
+        db.execute("SELECT 1")
+        db_ok = True
+    except Exception as e:
+        db_ok = str(e)
+    return jsonify({"ok": True, "db": db_ok})
+
 @app.route("/api/products", methods=["GET"])
 def get_products():
     rows = get_db().execute(

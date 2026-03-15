@@ -488,6 +488,16 @@
 </style>
 </head>
 <body>
+<!-- Diagnostic banner — remove once bugs confirmed fixed -->
+<div id="diag-banner" style="position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#1a1a1a;color:#0f0;font-family:monospace;font-size:11px;
+  padding:6px 10px;display:none;word-break:break-all">
+  <span id="diag-text"></span>
+  <button onclick="document.getElementById('diag-banner').style.display='none'"
+    style="float:right;background:none;border:1px solid #0f0;color:#0f0;
+    cursor:pointer;padding:1px 6px;font-size:11px">✕</button>
+</div>
+
 <div id="app">
 
   <!-- ═══ TAB: PRODUCTS ═══ -->
@@ -1540,7 +1550,8 @@ function renderRecentBrews() {
 // Settings Tab
 // ═══════════════════════════════════════════════════════════
 async function loadSettings() {
-  settings = await api('GET', '/api/settings');
+  const result = await api('GET', '/api/settings');
+  if (result !== null) settings = result;
   if (settings['default_method'])
     document.getElementById('setting-default-method').value = settings['default_method'];
   if (settings['default_dose'])
@@ -1790,9 +1801,29 @@ document.addEventListener('change', e => {
 // Init
 // ═══════════════════════════════════════════════════════════
 (async () => {
-  await loadSettings();
-  await loadProducts();
-  await loadRecentBrews();
+  // Diagnostic — log BASE path and ping result
+  const diagBanner = document.getElementById('diag-banner');
+  const diagText   = document.getElementById('diag-text');
+  try {
+    const ping = await fetch(BASE + '/api/ping');
+    const pingJson = await ping.json();
+    diagText.textContent = `BASE="${BASE}" | ping=${ping.status} | db=${pingJson.db}`;
+    diagBanner.style.display = 'block';
+    setTimeout(() => diagBanner.style.display = 'none', 15000);
+  } catch(e) {
+    diagText.textContent = `BASE="${BASE}" | ping FAILED: ${e.message}`;
+    diagBanner.style.display = 'block';
+  }
+
+  try {
+    await loadSettings();
+  } catch(e) { console.error('loadSettings failed:', e); }
+  try {
+    await loadProducts();
+  } catch(e) { console.error('loadProducts failed:', e); }
+  try {
+    await loadRecentBrews();
+  } catch(e) { console.error('loadRecentBrews failed:', e); }
   updateTimerDisplay();
 })();
 </script>
