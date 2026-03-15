@@ -388,6 +388,19 @@
   }
   .taste-tag.selected { background:var(--medium-roast); color:#fff; border-color:var(--medium-roast); }
 
+  /* ── Failed brew ── */
+  .failed-brew-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0 4px;
+  }
+  .failed-brew-label { font-family: Georgia,serif; font-size:14px; color:var(--espresso); }
+  .failed-brew-label small { display:block; font-size:11px; color:var(--text-muted); margin-top:1px; }
+  .failed-badge {
+    display:inline-block; padding:2px 8px; border-radius:10px;
+    background:#f5e0e0; color:#a33; font-size:11px;
+    font-family:'Trebuchet MS',sans-serif; margin-left:6px; vertical-align:middle;
+  }
+
   /* ── Suggestion banner ── */
   .suggest-banner {
     margin:0 16px 12px; padding:14px 16px; border-radius:14px;
@@ -695,6 +708,19 @@
           </div>
         </div>
 
+        <!-- Failed brew -->
+        <div class="failed-brew-row">
+          <div class="failed-brew-label">
+            Brew Failed?
+            <small>e.g. choked machine, knocked over</small>
+          </div>
+          <label class="toggle"><input type="checkbox" id="brew-failed"><span class="toggle-track"></span></label>
+        </div>
+        <div class="field" id="brew-fail-reason-field" style="display:none">
+          <label>Reason (optional)</label>
+          <input type="text" id="brew-fail-reason" placeholder="e.g. Grind too fine, choked the machine">
+        </div>
+
         <button class="btn btn-primary" style="width:100%;height:48px;font-size:15px;margin-top:12px" id="btn-save-brew">
           Save Brew
         </button>
@@ -929,8 +955,14 @@ const BASE = window.location.pathname.replace(/\/$/, "");
 async function api(method, path, body) {
   const opts = { method, headers: {'Content-Type':'application/json'} };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(BASE + path, opts);
-  return res.json();
+  try {
+    const res = await fetch(BASE + path, opts);
+    if (!res.ok) { console.error('API error', res.status, path); return null; }
+    return await res.json();
+  } catch (err) {
+    console.error('API fetch failed', path, err);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -995,14 +1027,16 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 // Products Tab
 // ═══════════════════════════════════════════════════════════
 async function loadProducts() {
-  products = await api('GET', '/api/products');
+  const result = await api('GET', '/api/products');
+  if (result !== null) products = result;
   renderProducts();
-  loadStats();
+  await loadStats();
 }
 
 async function loadStats() {
   const s = await api('GET', '/api/stats');
   const dashboard = document.getElementById('stats-dashboard');
+  if (!s) { dashboard.style.display = 'none'; return; }
 
   // Only show if we have any data
   if (s.alltime.total_brews === 0) {
@@ -1345,6 +1379,16 @@ function updatePortafilterVisibility() {
 }
 document.getElementById('brew-method').addEventListener('change', updatePortafilterVisibility);
 
+// Show/hide fail reason field
+document.getElementById('brew-failed').addEventListener('change', function() {
+  document.getElementById('brew-fail-reason-field').style.display = this.checked ? '' : 'none';
+  if (!this.checked) document.getElementById('brew-fail-reason').value = '';
+});
+document.getElementById('edit-brew-failed').addEventListener('change', function() {
+  document.getElementById('edit-fail-reason-field').style.display = this.checked ? '' : 'none';
+  if (!this.checked) document.getElementById('edit-brew-fail-reason').value = '';
+});
+
 // Load products into brew select
 async function fetchSuggestion(productId) {
   const banner = document.getElementById('suggest-banner');
@@ -1422,6 +1466,8 @@ document.getElementById('btn-save-brew').addEventListener('click', async () => {
     brew_time_secs: timerSecs,
     notes: document.getElementById('brew-notes').value.trim(),
     portafilter: document.querySelector('input[name="portafilter"]:checked')?.value || '',
+    failed: document.getElementById('brew-failed').checked ? 1 : 0,
+    fail_reason: document.getElementById('brew-fail-reason').value.trim(),
     rating: currentRating || null,
     taste_sour:   document.querySelector('.taste-tag[data-taste="sour"]')?.classList.contains('selected') ? 1 : 0,
     taste_bitter: document.querySelector('.taste-tag[data-taste="bitter"]')?.classList.contains('selected') ? 1 : 0,
@@ -1437,6 +1483,9 @@ document.getElementById('btn-save-brew').addEventListener('click', async () => {
   updateTimerDisplay();
   document.getElementById('brew-notes').value = '';
   document.querySelectorAll('input[name="portafilter"]').forEach(r => r.checked = false);
+  document.getElementById('brew-failed').checked = false;
+  document.getElementById('brew-fail-reason').value = '';
+  document.getElementById('brew-fail-reason-field').style.display = 'none';
   setRating(0);
   document.querySelectorAll('.taste-tag').forEach(t => t.classList.remove('selected'));
 
@@ -1447,7 +1496,8 @@ document.getElementById('btn-save-brew').addEventListener('click', async () => {
 
 // Load recent brews
 async function loadRecentBrews() {
-  recentBrews = await api('GET', '/api/brews?limit=20');
+  const result = await api('GET', '/api/brews?limit=20');
+  if (result !== null) recentBrews = result;
   renderRecentBrews();
 }
 
@@ -1471,8 +1521,9 @@ function renderRecentBrews() {
       <div class="brew-info">
         <div class="brew-coffee">${escHtml(b.product_name)}</div>
         <div class="brew-meta">${b.coffee_weight_g}g · ${escHtml(b.ratio)} · ${escHtml(b.grind_size || '—')}${b.portafilter ? ' · ' + escHtml(b.portafilter) : ''}</div>
-        ${b.rating ? `<div class="brew-stars">${'★'.repeat(b.rating)}${'☆'.repeat(5-b.rating)}</div>` : ''}
-        ${[b.taste_sour && 'sour', b.taste_bitter && 'bitter', b.taste_weak && 'weak', b.taste_strong && 'strong'].filter(Boolean).length
+        ${b.failed ? `<div class="brew-meta"><span class="failed-badge">✗ Failed</span>${b.fail_reason ? ' ' + escHtml(b.fail_reason) : ''}</div>` : ''}
+        ${!b.failed && b.rating ? `<div class="brew-stars">${'★'.repeat(b.rating)}${'☆'.repeat(5-b.rating)}</div>` : ''}
+        ${!b.failed && [b.taste_sour && 'sour', b.taste_bitter && 'bitter', b.taste_weak && 'weak', b.taste_strong && 'strong'].filter(Boolean).length
           ? `<div class="brew-taste-tags">${[b.taste_sour && 'sour', b.taste_bitter && 'bitter', b.taste_weak && 'weak', b.taste_strong && 'strong'].filter(Boolean).join(' · ')}</div>` : ''}
         <div class="brew-meta">${escHtml(b.brewed_at_rel)}</div>
       </div>
@@ -1549,34 +1600,32 @@ function escHtml(str) {
 function renderGrindField() {
   const wrap = document.getElementById('grind-field-wrap');
   if (!wrap) return;
-  const numeric = settings['grind_numeric'] === 'true';
-  // Sync the inline brew-tab toggle
+  // Read from both sources — inline toggle wins if present, else settings
   const inlineToggle = document.getElementById('brew-grind-toggle');
+  const numeric = inlineToggle ? inlineToggle.checked : (settings['grind_numeric'] === 'true');
+  // Keep both toggles in sync
   if (inlineToggle) inlineToggle.checked = numeric;
+  const settingsToggle = document.getElementById('setting-grind-numeric');
+  if (settingsToggle) settingsToggle.checked = numeric;
+  // Remember current value before re-rendering
+  const existing = document.getElementById('brew-grind');
+  const prevVal = existing ? existing.value : '';
   if (numeric) {
-    // Number input — e.g. clicks on a Comandante
     wrap.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px">
-        <input type="number" id="brew-grind" min="1" max="100" step="1"
+        <input type="number" id="brew-grind" min="1" max="500" step="1"
           placeholder="e.g. 24"
           style="flex:1;padding:10px 12px;border:1.5px solid var(--divider);
                  border-radius:10px;background:var(--parchment);color:var(--espresso);
                  font-size:14px;font-family:Georgia,serif">
         <span style="font-size:12px;color:var(--text-muted);white-space:nowrap">clicks / steps</span>
       </div>`;
-    document.getElementById('brew-grind').addEventListener('focus', function() {
-      this.style.borderColor = 'var(--caramel)';
-    });
-    document.getElementById('brew-grind').addEventListener('blur', function() {
-      this.style.borderColor = 'var(--divider)';
-    });
   } else {
-    // Descriptive select
     wrap.innerHTML = `
       <select id="brew-grind"
         style="width:100%;padding:10px 12px;border:1.5px solid var(--divider);
                border-radius:10px;background:var(--parchment);color:var(--espresso);
-               font-size:14px;font-family:Georgia,serif;-webkit-appearance:none">
+               font-size:14px;font-family:Georgia,serif;-webkit-appearance:none;appearance:none">
         <option value="">Select grind…</option>
         <option>Extra Fine</option>
         <option>Fine</option>
@@ -1586,13 +1635,11 @@ function renderGrindField() {
         <option>Coarse</option>
         <option>Extra Coarse</option>
       </select>`;
-    document.getElementById('brew-grind').addEventListener('focus', function() {
-      this.style.borderColor = 'var(--caramel)';
-    });
-    document.getElementById('brew-grind').addEventListener('blur', function() {
-      this.style.borderColor = 'var(--divider)';
-    });
   }
+  const grindEl = document.getElementById('brew-grind');
+  if (grindEl && prevVal) grindEl.value = prevVal;
+  grindEl.addEventListener('focus', function() { this.style.borderColor = 'var(--caramel)'; });
+  grindEl.addEventListener('blur',  function() { this.style.borderColor = 'var(--divider)'; });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1654,6 +1701,11 @@ function openBrewEdit(brew) {
   document.querySelectorAll('input[name="edit-portafilter"]').forEach(r => {
     r.checked = r.value === (brew.portafilter || '');
   });
+  // Failed brew
+  const failedEl = document.getElementById('edit-brew-failed');
+  failedEl.checked = !!brew.failed;
+  document.getElementById('edit-fail-reason-field').style.display = brew.failed ? '' : 'none';
+  document.getElementById('edit-brew-fail-reason').value = brew.fail_reason || '';
   document.getElementById('edit-brew-coffee').value  = brew.coffee_weight_g || '';
   document.getElementById('edit-brew-water').value   = brew.water_weight_g || '';
   document.getElementById('edit-brew-grind').value   = brew.grind_size || '';
@@ -1702,6 +1754,8 @@ document.getElementById('btn-update-brew').addEventListener('click', async () =>
     brew_time_secs:  displayToSecs(document.getElementById('edit-brew-time').value),
     notes:           document.getElementById('edit-brew-notes').value.trim(),
     portafilter:     document.querySelector('input[name="edit-portafilter"]:checked')?.value || '',
+    failed:          document.getElementById('edit-brew-failed').checked ? 1 : 0,
+    fail_reason:     document.getElementById('edit-brew-fail-reason').value.trim(),
     rating:          editBrewRating || null,
     taste_sour:      document.querySelector('#modal-brew-edit .taste-tag[data-taste="sour"]').classList.contains('selected') ? 1 : 0,
     taste_bitter:    document.querySelector('#modal-brew-edit .taste-tag[data-taste="bitter"]').classList.contains('selected') ? 1 : 0,
@@ -1727,10 +1781,8 @@ document.getElementById('btn-delete-brew').addEventListener('click', async () =>
 // Wire inline grind toggle on brew tab
 document.addEventListener('change', e => {
   if (e.target && e.target.id === 'brew-grind-toggle') {
+    // Update settings state then re-render — renderGrindField reads from toggle directly
     settings['grind_numeric'] = e.target.checked ? 'true' : 'false';
-    // Also sync the settings page toggle
-    const settingsToggle = document.getElementById('setting-grind-numeric');
-    if (settingsToggle) settingsToggle.checked = e.target.checked;
     renderGrindField();
   }
 });

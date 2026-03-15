@@ -64,6 +64,8 @@ def init_db():
             taste_weak       INTEGER DEFAULT 0,
             taste_strong     INTEGER DEFAULT 0,
             portafilter      TEXT DEFAULT '',
+            failed           INTEGER DEFAULT 0,
+            fail_reason      TEXT DEFAULT '',
             brewed_at        INTEGER DEFAULT (strftime('%s','now'))
         );
         CREATE TABLE IF NOT EXISTS settings (
@@ -80,6 +82,8 @@ def init_db():
         ("taste_weak",   "INTEGER DEFAULT 0"),
         ("taste_strong", "INTEGER DEFAULT 0"),
         ("portafilter",  "TEXT DEFAULT ''"),
+        ("failed",       "INTEGER DEFAULT 0"),
+        ("fail_reason",  "TEXT DEFAULT ''"),
     ]:
         if col not in cols:
             conn.execute(f"ALTER TABLE brews ADD COLUMN {col} {defn}")
@@ -124,6 +128,8 @@ def brew_to_dict(b):
         "taste_sour": b["taste_sour"], "taste_bitter": b["taste_bitter"],
         "taste_weak": b["taste_weak"], "taste_strong": b["taste_strong"],
         "portafilter": b["portafilter"],
+        "failed": b["failed"],
+        "fail_reason": b["fail_reason"],
         "brewed_at": b["brewed_at"],
         "brewed_at_rel": relative_time(b["brewed_at"]),
         "ratio": ratio_str(b["coffee_weight_g"], b["water_weight_g"]),
@@ -214,8 +220,9 @@ def add_brew():
         """INSERT INTO brews
            (product_id, product_name, brew_method, coffee_weight_g, water_weight_g,
             grind_size, brew_time_secs, notes, rating,
-            taste_sour, taste_bitter, taste_weak, taste_strong, portafilter, brewed_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            taste_sour, taste_bitter, taste_weak, taste_strong, portafilter,
+            failed, fail_reason, brewed_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (d["product_id"], d["product_name"], d["brew_method"],
          d["coffee_weight_g"], d.get("water_weight_g", 0),
          d.get("grind_size",""), d.get("brew_time_secs", 0),
@@ -223,6 +230,7 @@ def add_brew():
          int(bool(d.get("taste_sour"))), int(bool(d.get("taste_bitter"))),
          int(bool(d.get("taste_weak"))), int(bool(d.get("taste_strong"))),
          d.get("portafilter",""),
+         int(bool(d.get("failed"))), d.get("fail_reason","").strip(),
          now)
     )
     db.execute(
@@ -241,7 +249,7 @@ def update_brew(bid):
             brew_method=?, coffee_weight_g=?, water_weight_g=?,
             grind_size=?, brew_time_secs=?, notes=?,
             rating=?, taste_sour=?, taste_bitter=?, taste_weak=?, taste_strong=?,
-            portafilter=?
+            portafilter=?, failed=?, fail_reason=?
         WHERE id=?""",
         (d.get("brew_method"), d.get("coffee_weight_g"), d.get("water_weight_g", 0),
          d.get("grind_size", ""), d.get("brew_time_secs", 0),
@@ -249,6 +257,7 @@ def update_brew(bid):
          int(bool(d.get("taste_sour"))), int(bool(d.get("taste_bitter"))),
          int(bool(d.get("taste_weak"))), int(bool(d.get("taste_strong"))),
          d.get("portafilter",""),
+         int(bool(d.get("failed"))), d.get("fail_reason","").strip(),
          bid)
     )
     db.commit()
@@ -425,7 +434,7 @@ def export_csv():
             b.brew_method, b.coffee_weight_g, b.water_weight_g,
             b.grind_size, b.brew_time_secs, b.notes,
             b.rating, b.taste_sour, b.taste_bitter, b.taste_weak, b.taste_strong,
-            b.portafilter,
+            b.portafilter, b.failed, b.fail_reason,
             datetime(b.brewed_at, 'unixepoch') as brewed_at
         FROM brews b
         LEFT JOIN products p ON p.id = b.product_id
@@ -438,7 +447,7 @@ def export_csv():
         "id", "coffee", "brand", "method",
         "coffee_g", "water_g", "ratio", "grind_size",
         "brew_time", "notes", "rating",
-        "sour", "bitter", "weak", "strong", "portafilter", "brewed_at"
+        "sour", "bitter", "weak", "strong", "portafilter", "failed", "fail_reason", "brewed_at"
     ])
     for r in rows:
         coffee_g = r["coffee_weight_g"] or 0
@@ -455,6 +464,8 @@ def export_csv():
             "yes" if r["taste_weak"] else "",
             "yes" if r["taste_strong"] else "",
             r["portafilter"] or "",
+            "yes" if r["failed"] else "",
+            r["fail_reason"] or "",
             r["brewed_at"],
         ])
     csv_bytes = out.getvalue().encode("utf-8")
